@@ -2,16 +2,25 @@
 # Этот скрипт управляет службой ClusterControlAgent
 
 param (
-    [Parameter(Mandatory=$true, HelpMessage="Specify the action: install, remove, start, stop, restart")]
+    [Parameter(Mandatory=$true, HelpMessage="Specify the action: install, remove, start, stop, restart, status")]
     [ValidateSet("install", "remove", "start", "stop", "restart", "status")]
     [string]$Action
 )
 
-# Configuration
-$ServiceName = "ClusterControlAgent"
-$ScriptPath = "C:\path\to\your\AgentService.ps1" # Замените правильным путем к AgentService.ps1
-$LogFile = "ManageAgentService.log"
-$EnableLogging = $true  # Измените на $false, чтобы отключить логирование
+# Load configuration from JSON file
+$ConfigFile = "config.json"
+try {
+    $Config = Get-Content -Path $ConfigFile -Raw | ConvertFrom-Json
+} catch {
+    Write-Host "Error loading configuration file: $($_.Exception.Message)"
+    exit
+}
+
+# Extract configurations
+$ScriptPath = $Config.ManageAgentService.ScriptPath
+$LogFile = $Config.ManageAgentService.LogFile
+$EnableLogging = $Config.ManageAgentService.EnableLogging
+$ServiceName = $Config.ServiceName
 
 # Function to write to log
 function Write-Log {
@@ -33,7 +42,7 @@ function Write-Log {
 function Get-ServiceStatus {
     Write-Log "Checking service status..."
     try {
-        $service = Get-Service -Name $ServiceName -ErrorAction Stop # Используем Stop, чтобы отлавливать несуществующие службы
+        $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 
         if ($service) {
             Write-Log "Service '$ServiceName' status: $($service.Status)"
@@ -43,7 +52,7 @@ function Get-ServiceStatus {
             return $null
         }
     } catch {
-        Write-Log "Service '$ServiceName' not found." -Level Warning
+        Write-Log "Error getting service status: $($_.Exception.Message)" -Level Error
         return $null
     }
 }
@@ -54,9 +63,9 @@ function Install-Service {
 
     if ($currentStatus -ne $null) {
         Write-Log "Service already exists. Stopping and removing..."
-        Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
+        Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue  # Попытка остановить
         Start-Sleep -Seconds 5
-        Remove-Service -Name $ServiceName -ErrorAction SilentlyContinue
+        Remove-Service -Name $ServiceName -ErrorAction SilentlyContinue      # Удаление
     }
 
     try {
@@ -78,8 +87,11 @@ function Remove-Service {
 
     if ($currentStatus -ne $null) {
         try {
-            Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
-            Start-Sleep -Seconds 5
+            if ($currentStatus -ne "Stopped" -and $currentStatus -ne $null)
+            {
+                Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
+                Start-Sleep -Seconds 5
+            }
             Remove-Service -Name $ServiceName -ErrorAction SilentlyContinue
             Write-Log "Service '$ServiceName' removed successfully."
         } catch {

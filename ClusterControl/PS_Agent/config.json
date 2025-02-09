@@ -1,0 +1,20 @@
+{
+    "ServiceName": "ClusterControlAgent",
+    "AgentService": {
+      "ServerAddress": "127.0.0.1",
+      "MonitorPort": 5001,
+      "ControlPort": 5002,
+      "AgentId": "agent001",
+      "LogFile": "AgentService.log",
+      "LogLevel": "Info"
+    },
+    "ManageAgentService": {
+      "ScriptPath": "C:\\path\\to\\your\\AgentService.ps1",
+      "LogFile": "ManageAgentService.log",
+      "EnableLogging": true
+    },
+    "TestAgent": {
+      "LoggingType": "Combined",
+      "LogFile": "TestAgent.log"
+    }
+  }

@@ -1,12 +1,23 @@
 # AgentService.ps1
-# Configuration
-$ServerAddress = "127.0.0.1" # Change to the IP address of your management server
-$MonitorPort = 5001
-$ControlPort = 5002
-$AgentId = "agent001" # Replace with a unique identifier for this agent
-$ServiceName = "ClusterControlAgent" # Имя службы
-$LogFile = "AgentService.log"
-$LogLevel = "Info" # Debug, Info, Warning, Error
+
+# Load configuration from JSON file
+$ConfigFile = "config.json"
+try {
+    $Config = Get-Content -Path $ConfigFile -Raw | ConvertFrom-Json
+} catch {
+    Write-Host "Error loading configuration file: $($_.Exception.Message)"
+    exit
+}
+
+# Extract configurations
+$ServerAddress = $Config.AgentService.ServerAddress
+$MonitorPort = $Config.AgentService.MonitorPort
+$ControlPort = $Config.AgentService.ControlPort
+$AgentId = $Config.AgentService.AgentId
+$LogFile = $Config.AgentService.LogFile
+$LogLevel = $Config.AgentService.LogLevel
+$ServiceName = $Config.ServiceName
+
 
 # Function to write to log
 function Write-Log {
@@ -202,32 +213,18 @@ try {
     while ($true) {
         try {
             # Start the monitor loop and control listener in separate runspaces
-            Write-Log "Starting Monitor Loop..." -Level Info
-            Start-Job -ScriptBlock { Start-MonitorLoop } | Out-Null
+            #Write-Log "Starting Monitor Loop..." -Level Info
+            #Start-Job -ScriptBlock { Start-MonitorLoop } | Out-Null
 
-            Write-Log "Starting Control Listener..." -Level Info
-            Start-Job -ScriptBlock { Start-ControlListener } | Out-Null
+            #Write-Log "Starting Control Listener..." -Level Info
+            #Start-Job -ScriptBlock { Start-ControlListener } | Out-Null
+            Start-MonitorLoop
+            Start-ControlListener
 
             Write-Log "Agent started.  Monitoring and listening for commands..." -Level Info
-
+             Start-Sleep -Seconds 60
             # Keep the main loop alive - check every 60 seconds if monitor and control listeners are still running
-            while ($true) {
-                Start-Sleep -Seconds 60
 
-                # Check if jobs are still running
-                $monitorJob = Get-Job | Where-Object {$_.ScriptBlock -like "*Start-MonitorLoop*"}
-                $controlJob = Get-Job | Where-Object {$_.ScriptBlock -like "*Start-ControlListener*"}
-
-                if ($monitorJob -eq $null -or $monitorJob.State -ne "Running") {
-                    Write-Log "Monitor loop job has stopped. Restarting..." -Level Warning
-                    Start-Job -ScriptBlock { Start-MonitorLoop } | Out-Null
-                }
-
-                if ($controlJob -eq $null -or $controlJob.State -ne "Running") {
-                    Write-Log "Control listener job has stopped. Restarting..." -Level Warning
-                    Start-Job -ScriptBlock { Start-ControlListener } | Out-Null
-                }
-            }
         }
         catch {
             Write-Log "Main loop error: $($_.Exception.Message)" -Level Error

@@ -1,11 +1,20 @@
 # TestAgent.ps1
 # Скрипт для тестирования агента ClusterControlAgent
 
-# Configuration
-$ServerAddress = "127.0.0.1" # Change to the IP address of your management server
-$ControlPort = 5002
-$LogFile = "TestAgent.log"
-$LoggingType = "Combined" # Options: "Console", "File", "Combined"
+# Load configuration from JSON file
+$ConfigFile = "config.json"
+try {
+    $Config = Get-Content -Path $ConfigFile -Raw | ConvertFrom-Json
+} catch {
+    Write-Host "Error loading configuration file: $($_.Exception.Message)"
+    exit
+}
+
+# Extract configurations
+$ServerAddress = $Config.AgentService.ServerAddress
+$ControlPort = $Config.AgentService.ControlPort
+$LoggingType = $Config.TestAgent.LoggingType
+$LogFile = $Config.TestAgent.LogFile
 
 # Function to write log messages
 function Write-TestLog {
