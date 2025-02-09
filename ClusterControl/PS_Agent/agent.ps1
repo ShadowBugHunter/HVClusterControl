@@ -1,7 +1,7 @@
 # PowerShell Agent Script
 
 # Configuration
-$ServerAddress = "127.0.0.1" # Change to the IP address of your management server
+$ServerAddress = "172.25.0.50" # Change to the IP address of your management server
 $MonitorPort = 5001
 $ControlPort = 5002
 $AgentId = "agent001" # Replace with a unique identifier for this agent
