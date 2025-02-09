@@ -1,0 +1,9 @@
+Запуск с правами администратора: Откройте PowerShell от имени администратора. Это обязательно для установки, удаления, запуска, остановки и перезапуска служб.
+
+Запуск скрипта управления: Используйте следующий синтаксис для запуска ManageAgentService.ps1:
+
+.\ManageAgentService.ps1 -Action install
+.\ManageAgentService.ps1 -Action remove
+.\ManageAgentService.ps1 -Action start
+.\ManageAgentService.ps1 -Action stop
+.\ManageAgentService.ps1 -Action restart
