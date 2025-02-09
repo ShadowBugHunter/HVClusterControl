@@ -3,81 +3,129 @@
 
 param (
     [Parameter(Mandatory=$true, HelpMessage="Specify the action: install, remove, start, stop, restart")]
-    [ValidateSet("install", "remove", "start", "stop", "restart")]
+    [ValidateSet("install", "remove", "start", "stop", "restart", "status")]
     [string]$Action
 )
 
 # Configuration
 $ServiceName = "ClusterControlAgent"
 $ScriptPath = "C:\path\to\your\AgentService.ps1" # Замените правильным путем к AgentService.ps1
+$LogFile = "ManageAgentService.log"
+$EnableLogging = $true  # Измените на $false, чтобы отключить логирование
 
-function Install-Service {
-    Write-Host "Installing service '$ServiceName'..."
-    # Сначала остановите службу, если она уже существует
-    if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
-        Write-Warning "Service already exists. Stopping and removing..."
-        Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
-        Start-Sleep -Seconds 5 # Дайте время службе остановиться
-        Remove-Service -Name $ServiceName -ErrorAction SilentlyContinue # Удалить старую службу
+# Function to write to log
+function Write-Log {
+    param (
+        [string]$Message,
+        [string]$Level = "Info" # Info, Warning, Error
+    )
+
+    $Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $LogEntry = "$Timestamp [$Level] - $Message"
+
+    if ($EnableLogging) {
+        Out-File -FilePath $LogFile -Append -InputObject $LogEntry
     }
 
-    # Создаем новую службу с помощью sc.exe (так как New-Service требует PS7+)
+    Write-Host $LogEntry
+}
+
+function Get-ServiceStatus {
+    Write-Log "Checking service status..."
+    try {
+        $service = Get-Service -Name $ServiceName -ErrorAction Stop # Используем Stop, чтобы отлавливать несуществующие службы
+
+        if ($service) {
+            Write-Log "Service '$ServiceName' status: $($service.Status)"
+            return $service.Status
+        } else {
+            Write-Log "Service '$ServiceName' not found." -Level Warning
+            return $null
+        }
+    } catch {
+        Write-Log "Service '$ServiceName' not found." -Level Warning
+        return $null
+    }
+}
+
+function Install-Service {
+    Write-Log "Installing service '$ServiceName'..."
+    $currentStatus = Get-ServiceStatus
+
+    if ($currentStatus -ne $null) {
+        Write-Log "Service already exists. Stopping and removing..."
+        Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 5
+        Remove-Service -Name $ServiceName -ErrorAction SilentlyContinue
+    }
+
     try {
         $cmd = "sc.exe create `"$ServiceName`" binPath=`"powershell.exe -ExecutionPolicy Bypass -File `"$ScriptPath`"`" start= auto displayname= `"$($ServiceName) Display`""
-        Invoke-Expression $cmd # Выполняем команду
-        # Задаем описание службы (обязательно запускать после создания)
+        Invoke-Expression $cmd
         $desc = "sc.exe description `"$ServiceName`" `"$($ServiceName) description`""
         Invoke-Expression $desc
-        # Включаем восстановление после сбоев
         $restartcmd = "sc.exe failure `"$ServiceName`" reset= 86400 actions= restart/60000/restart/60000/restart/60000"
         Invoke-Expression $restartcmd
-        Write-Host "Service '$ServiceName' installed successfully."
+        Write-Log "Service '$ServiceName' installed successfully."
     } catch {
-        Write-Error "Failed to install service: $($_.Exception.Message)"
+        Write-Log "Failed to install service: $($_.Exception.Message)" -Level Error
     }
 }
 
 function Remove-Service {
-    Write-Host "Removing service '$ServiceName'..."
-    try {
-        if (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue) {
+    Write-Log "Removing service '$ServiceName'..."
+    $currentStatus = Get-ServiceStatus
+
+    if ($currentStatus -ne $null) {
+        try {
             Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
-            Start-Sleep -Seconds 5 # Дайте время службе остановиться
+            Start-Sleep -Seconds 5
             Remove-Service -Name $ServiceName -ErrorAction SilentlyContinue
+            Write-Log "Service '$ServiceName' removed successfully."
+        } catch {
+            Write-Log "Failed to remove service: $($_.Exception.Message)" -Level Error
         }
-        Write-Host "Service '$ServiceName' removed successfully."
-    } catch {
-        Write-Error "Failed to remove service: $($_.Exception.Message)"
+    } else {
+        Write-Log "Service '$ServiceName' does not exist." -Level Warning
     }
 }
 
 function Start-ServiceFunction {
-    Write-Host "Starting service '$ServiceName'..."
+    Write-Log "Starting service '$ServiceName'..."
     try {
         Start-Service -Name $ServiceName
-        Write-Host "Service '$ServiceName' started successfully."
+        Write-Log "Service '$ServiceName' started successfully."
     } catch {
-        Write-Error "Failed to start service: $($_.Exception.Message)"
+        Write-Log "Failed to start service: $($_.Exception.Message)" -Level Error
     }
 }
 
 function Stop-ServiceFunction {
-    Write-Host "Stopping service '$ServiceName'..."
+    Write-Log "Stopping service '$ServiceName'..."
     try {
         Stop-Service -Name $ServiceName -Force
-        Write-Host "Service '$ServiceName' stopped successfully."
+        Write-Log "Service '$ServiceName' stopped successfully."
     } catch {
-        Write-Error "Failed to stop service: $($_.Exception.Message)"
+        Write-Log "Failed to stop service: $($_.Exception.Message)" -Level Error
     }
 }
 
 function Restart-ServiceFunction {
-    Write-Host "Restarting service '$ServiceName'..."
+    Write-Log "Restarting service '$ServiceName'..."
     try {
         Restart-Service -Name $ServiceName -Force
-        Write-Host "Service '$ServiceName' restarted successfully."
+        Write-Log "Service '$ServiceName' restarted successfully."
     } catch {
-        Write-Error "Failed to restart service: $($_.Exception.Message)"
+        Write-Log "Failed to restart service: $($_.Exception.Message)" -Level Error
+    }
+}
+
+function Status-ServiceFunction {
+    $status = Get-ServiceStatus
+    if ($status) {
+        Write-Log "Service '$ServiceName' status is: $status"
+    } else {
+        Write-Log "Service '$ServiceName' not found." -Level Warning
     }
 }
 
@@ -88,4 +136,5 @@ switch ($Action) {
     "start"   { Start-ServiceFunction }
     "stop"    { Stop-ServiceFunction }
     "restart" { Restart-ServiceFunction }
+    "status"  { Status-ServiceFunction }
 }
